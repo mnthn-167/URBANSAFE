@@ -11,13 +11,21 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-urbansafe-dev-key-cha
 
 DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,.vercel.app,.now.sh').split(',')
+ALLOWED_HOSTS = ['.vercel.app', '.now.sh', 'localhost', '127.0.0.1']
+if os.environ.get('ALLOWED_HOSTS'):
+    ALLOWED_HOSTS.extend([h.strip() for h in os.environ.get('ALLOWED_HOSTS').split(',')])
 
-# CSRF Trusted Origins for Vercel
+# Secure Proxy Settings for Vercel/Render
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# CSRF Trusted Origins
 CSRF_TRUSTED_ORIGINS = [
     'https://*.vercel.app',
     'https://*.now.sh',
 ]
+if os.environ.get('VERCEL_URL'):
+    CSRF_TRUSTED_ORIGINS.append(f"https://{os.environ.get('VERCEL_URL')}")
 
 
 INSTALLED_APPS = [
