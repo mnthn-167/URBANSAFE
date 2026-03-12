@@ -1,0 +1,202 @@
+{% extends 'base.html' %}
+{% block title %}{{ incident.title }} - UrbanSafe{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <a href="{% url 'incident_list' %}" class="btn btn-outline btn-sm mb-2">
+        <i class="fas fa-arrow-left"></i> Back to Incidents
+    </a>
+    <div class="flex-between">
+        <h1 class="page-title">{{ incident.title }}</h1>
+        <div class="flex gap-1">
+            <span class="badge badge-{{ incident.category }}">{{ incident.get_category_display }}</span>
+            <span class="badge badge-{{ incident.severity }}">{{ incident.get_severity_display }}</span>
+            <span class="badge badge-{{ incident.status }}">{{ incident.get_status_display }}</span>
+        </div>
+    </div>
+</div>
+
+<div class="incident-detail">
+    <!-- Main Content -->
+    <div>
+        {% if incident.photo %}
+        <img src="{{ incident.photo.url }}" alt="{{ incident.title }}" class="incident-image-detail">
+        {% endif %}
+
+        <div class="card detail-section">
+            <h3><i class="fas fa-file-alt" style="color: var(--accent);"></i> Description</h3>
+            <p style="color: var(--text-secondary); line-height: 1.8;">{{ incident.description }}</p>
+        </div>
+
+        <div class="card detail-section">
+            <h3><i class="fas fa-info-circle" style="color: var(--info);"></i> Details</h3>
+            <div class="detail-info">
+                <div class="detail-info-item">
+                    <div class="detail-info-label">Location</div>
+                    <div class="detail-info-value">{{ incident.address }}</div>
+                </div>
+                <div class="detail-info-item">
+                    <div class="detail-info-label">Reported By</div>
+                    <div class="detail-info-value">
+                        {% if incident.reported_by.first_name %}
+                        {{ incident.reported_by.get_full_name }}
+                        {% else %}
+                        {{ incident.reported_by.username }}
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="detail-info-item">
+                    <div class="detail-info-label">Reported At</div>
+                    <div class="detail-info-value">{{ incident.created_at|date:"M d, Y H:i" }}</div>
+                </div>
+                <div class="detail-info-item">
+                    <div class="detail-info-label">Last Updated</div>
+                    <div class="detail-info-value">{{ incident.updated_at|date:"M d, Y H:i" }}</div>
+                </div>
+                {% if incident.latitude and incident.longitude %}
+                <div class="detail-info-item">
+                    <div class="detail-info-label">Coordinates</div>
+                    <div class="detail-info-value">{{ incident.latitude }}, {{ incident.longitude }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Comments Section -->
+        <div class="card detail-section">
+            <h3><i class="fas fa-comments" style="color: #8b5cf6;"></i> Discussion ({{ comments|length }})</h3>
+
+            {% if comments %}
+            <div class="comment-list">
+                {% for comment in comments %}
+                <div class="comment-item">
+                    <div class="comment-avatar">{{ comment.user.first_name.0|default:comment.user.username.0|upper }}
+                    </div>
+                    <div class="comment-body">
+                        <div class="comment-header">
+                            <span class="comment-author">{{ comment.user.get_full_name|default:comment.user.username
+                                }}</span>
+                            <span class="comment-time">{{ comment.time_since }}</span>
+                        </div>
+                        <p class="comment-text">{{ comment.text }}</p>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted" style="font-size: 0.9rem;">No comments yet. Be the first to contribute!</p>
+            {% endif %}
+
+            <form method="POST" action="{% url 'add_comment' incident.pk %}" class="mt-2">
+                {% csrf_token %}
+                <div class="form-group">
+                    {{ comment_form.text }}
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="fas fa-paper-plane"></i> Post Comment
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div>
+        <!-- Verification Box -->
+        <div class="card detail-section">
+            <h3><i class="fas fa-check-double" style="color: var(--success);"></i> Verification</h3>
+            <div class="verification-box">
+                <div class="flex-between mb-1">
+                    <span style="font-size: 0.85rem; color: var(--text-secondary);">Community Verification</span>
+                    <span style="font-weight: 700;">{{ verification_count }}/{{ threshold }}</span>
+                </div>
+                <div class="verification-progress">
+                    <div class="verification-bar" style="width: {{ verification_progress }}%;"></div>
+                </div>
+
+                {% if verifications %}
+                <div class="mt-2">
+                    {% for v in verifications %}
+                    <div
+                        style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; font-size: 0.85rem;">
+                        {% if v.is_verified %}
+                        <i class="fas fa-check-circle" style="color: var(--success);"></i>
+                        {% else %}
+                        <i class="fas fa-times-circle" style="color: var(--danger);"></i>
+                        {% endif %}
+                        <span>{{ v.verified_by.get_full_name|default:v.verified_by.username }}</span>
+                        <span class="text-muted" style="margin-left: auto; font-size: 0.75rem;">{{
+                            v.created_at|timesince }} ago</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                {% if not user_verified and incident.reported_by != request.user %}
+                <form method="POST" action="{% url 'verify_incident' incident.pk %}">
+                    {% csrf_token %}
+                    <div class="form-group mt-2">
+                        <textarea name="notes" class="form-input" rows="2"
+                            placeholder="Add optional notes..."></textarea>
+                    </div>
+                    <div class="verification-actions">
+                        <button type="submit" name="action" value="verify" class="btn btn-success btn-sm"
+                            style="flex:1;">
+                            <i class="fas fa-check"></i> Verify
+                        </button>
+                        <button type="submit" name="action" value="dispute" class="btn btn-danger btn-sm"
+                            style="flex:1;">
+                            <i class="fas fa-times"></i> Dispute
+                        </button>
+                    </div>
+                </form>
+                {% elif user_verified %}
+                <p class="text-muted mt-2" style="font-size: 0.85rem;">
+                    <i class="fas fa-check-circle" style="color: var(--success);"></i>
+                    You have already submitted your verification.
+                </p>
+                {% endif %}
+            </div>
+        </div>
+
+
+        <!-- Admin/Reporter Actions -->
+        {% if request.user.is_staff or request.user == incident.reported_by %}
+        <div class="card detail-section">
+            <h3><i class="fas fa-cog" style="color: var(--warning);"></i> Actions</h3>
+
+            {% if request.user.is_staff and incident.status != 'resolved' %}
+            <a href="{% url 'resolve_incident' incident.pk %}" class="btn btn-success btn-block mb-1"
+                onclick="return confirm('Mark this incident as resolved?');">
+                <i class="fas fa-check-double"></i> Mark as Resolved
+            </a>
+            {% endif %}
+
+            <a href="{% url 'delete_incident' incident.pk %}" class="btn btn-danger btn-block">
+                <i class="fas fa-trash-alt"></i> Delete Incident
+            </a>
+        </div>
+        {% endif %}
+
+        <!-- Quick Info -->
+        <div class="card">
+            <h3 style="font-size: 1rem; margin-bottom: 1rem;">
+                <i class="fas fa-chart-bar" style="color: var(--accent);"></i> Quick Stats
+            </h3>
+            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                <div class="flex-between" style="font-size: 0.85rem;">
+                    <span class="text-muted">Comments</span>
+                    <span style="font-weight: 600;">{{ comments|length }}</span>
+                </div>
+                <div class="flex-between" style="font-size: 0.85rem;">
+                    <span class="text-muted">Verifications</span>
+                    <span style="font-weight: 600;">{{ verification_count }}</span>
+                </div>
+                <div class="flex-between" style="font-size: 0.85rem;">
+                    <span class="text-muted">Status</span>
+                    <span class="badge badge-{{ incident.status }}">{{ incident.get_status_display }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

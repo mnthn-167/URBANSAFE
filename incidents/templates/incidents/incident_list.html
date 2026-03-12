@@ -1,0 +1,295 @@
+{% extends 'base.html' %}
+{% block title %}Incidents - UrbanSafe{% endblock %}
+
+{% block content %}
+<div class="page-header flex-between">
+    <div>
+        <h1 class="page-title">Incidents</h1>
+        <p class="page-subtitle">Browse and filter community safety reports</p>
+    </div>
+    <a href="{% url 'report_incident' %}" class="btn btn-primary">
+        <i class="fas fa-plus-circle"></i> Report Incident
+    </a>
+</div>
+
+<!-- Filters -->
+<form method="GET" class="filters-bar" id="filter-form">
+    <select name="category" class="filter-select">
+        <option value="">All Categories</option>
+        {% for value, label in categories %}
+        <option value="{{ value }}" {% if category_filter == value %}selected{% endif %}>
+            {{ label }}
+        </option>
+        {% endfor %}
+    </select>
+
+    <select name="status" class="filter-select">
+        <option value="">All Status</option>
+        {% for value, label in statuses %}
+        <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>
+            {{ label }}
+        </option>
+        {% endfor %}
+    </select>
+
+    <select name="severity" class="filter-select">
+        <option value="">All Severity</option>
+        {% for value, label in severities %}
+        <option value="{{ value }}" {% if severity_filter == value %}selected{% endif %}>
+            {{ label }}
+        </option>
+        {% endfor %}
+    </select>
+
+    <div class="search-wrapper">
+        <i class="fas fa-search"></i>
+        <input type="text" name="search" class="search-input"
+               placeholder="Search incidents..."
+               value="{{ search_query }}">
+    </div>
+
+    <button type="submit" class="btn btn-outline btn-sm">
+        <i class="fas fa-filter"></i> Filter
+    </button>
+</form>
+
+<div class="filters-bar" style="margin-top: 0.75rem;">
+    <button type="button" class="btn btn-outline btn-sm" id="live-location-btn">
+        <i class="fas fa-location-crosshairs"></i> Enable Live Nearby
+    </button>
+    <select class="filter-select" id="live-radius-km" style="max-width: 170px;">
+        <option value="2">2 km radius</option>
+        <option value="5" selected>5 km radius</option>
+        <option value="10">10 km radius</option>
+        <option value="25">25 km radius</option>
+    </select>
+    <span class="incident-meta-item" id="live-status">
+        <i class="fas fa-satellite-dish"></i> Live updates on: all incidents
+    </span>
+</div>
+
+<!-- Incident Grid -->
+{% if incidents %}<div class="incident-grid" id="incident-grid">{% else %}<div class="incident-grid" id="incident-grid"
+    style="display: none;">{% endif %}
+    {% for incident in incidents %}
+    <a href="{% url 'incident_detail' incident.pk %}" class="incident-card" style="color: inherit;">
+
+        {% if incident.photo %}
+        <img src="{{ incident.photo.url }}" alt="{{ incident.title }}" class="incident-card-img">
+        {% endif %}
+
+        <div class="incident-card-body">
+            <div class="incident-card-header">
+                <h3 class="incident-card-title">{{ incident.title }}</h3>
+                <span class="badge badge-{{ incident.severity }}">
+                    {{ incident.get_severity_display }}
+                </span>
+            </div>
+
+            <p class="incident-card-desc">
+                {{ incident.description }}
+            </p>
+
+            <div class="incident-card-meta">
+                <span class="badge badge-{{ incident.category }}">
+                    {{ incident.get_category_display }}
+                </span>
+                <span class="badge badge-{{ incident.status }}">
+                    {{ incident.get_status_display }}
+                </span>
+                <span class="incident-meta-item">
+                    <i class="fas fa-clock"></i> {{ incident.time_since }}
+                </span>
+                <span class="incident-meta-item">
+                    <i class="fas fa-map-marker-alt"></i> 
+                    {{ incident.address|truncatewords:4 }}
+                </span>
+                <span class="incident-meta-item">
+                    <i class="fas fa-comments"></i> {{ incident.comment_count }}
+                </span>
+                <span class="incident-meta-item">
+                    <i class="fas fa-check-double"></i> 
+                    {{ incident.verification_count }}
+                </span>
+                {% if incident.photo %}
+                <span class="incident-meta-item" title="{{ incident.photo.name }}">
+                    <i class="fas fa-image"></i> {{ incident.photo.name|truncatechars:24 }}
+                </span>
+                {% endif %}
+            </div>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+<div class="empty-state" id="incident-empty" {% if incidents %}style="display: none;"{% endif %}>
+    <div class="empty-icon">
+        <i class="fas fa-shield-halved"></i>
+    </div>
+    <h3 class="empty-title">No Incidents Found</h3>
+    <p class="empty-desc">
+        No incidents match your filters, or no incidents have been reported yet.
+    </p>
+    <a href="{% url 'report_incident' %}" class="btn btn-primary">
+        <i class="fas fa-plus-circle"></i> Report an Incident
+    </a>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    (function () {
+        const apiUrl = "{% url 'live_incidents_api' %}";
+        const incidentGrid = document.getElementById('incident-grid');
+        const incidentEmpty = document.getElementById('incident-empty');
+        const filterForm = document.getElementById('filter-form');
+        const liveLocationBtn = document.getElementById('live-location-btn');
+        const liveRadiusSelect = document.getElementById('live-radius-km');
+        const liveStatus = document.getElementById('live-status');
+
+        if (!incidentGrid || !incidentEmpty) {
+            return;
+        }
+
+        let liveLocation = null;
+        let isFetching = false;
+
+        function escapeHtml(value) {
+            const span = document.createElement('span');
+            span.textContent = value || '';
+            return span.innerHTML;
+        }
+
+        function getFilterValue(name) {
+            const input = filterForm ? filterForm.querySelector(`[name="${name}"]`) : null;
+            return input ? input.value : '';
+        }
+
+        function updateStatus(message) {
+            if (liveStatus) {
+                liveStatus.innerHTML = `<i class="fas fa-satellite-dish"></i> ${message}`;
+            }
+        }
+
+        function renderIncidents(incidents) {
+            if (!incidents.length) {
+                incidentGrid.style.display = 'none';
+                incidentEmpty.style.display = 'block';
+                return;
+            }
+
+            incidentEmpty.style.display = 'none';
+            incidentGrid.style.display = 'grid';
+
+            incidentGrid.innerHTML = incidents.map((incident) => {
+                const mediaName = incident.media_reference ? incident.media_reference.split('/').pop() : '';
+                const photoSection = incident.photo_url
+                    ? `<img src="${escapeHtml(incident.photo_url)}" alt="${escapeHtml(incident.title)}" class="incident-card-img">`
+                    : '';
+                const mediaRef = incident.media_reference
+                    ? `<span class="incident-meta-item" title="${escapeHtml(incident.media_reference)}"><i class="fas fa-image"></i> ${escapeHtml(mediaName)}</span>`
+                    : '';
+                const distanceMeta = incident.distance_km !== null
+                    ? `<span class="incident-meta-item"><i class="fas fa-location-dot"></i> ${incident.distance_km} km away</span>`
+                    : '';
+
+                return `
+                    <a href="${escapeHtml(incident.detail_url)}" class="incident-card" style="color: inherit;">
+                        ${photoSection}
+                        <div class="incident-card-body">
+                            <div class="incident-card-header">
+                                <h3 class="incident-card-title">${escapeHtml(incident.title)}</h3>
+                                <span class="badge badge-${escapeHtml(incident.severity)}">${escapeHtml(incident.severity_display)}</span>
+                            </div>
+                            <p class="incident-card-desc">${escapeHtml(incident.description)}</p>
+                            <div class="incident-card-meta">
+                                <span class="badge badge-${escapeHtml(incident.category)}">${escapeHtml(incident.category_display)}</span>
+                                <span class="badge badge-${escapeHtml(incident.status)}">${escapeHtml(incident.status_display)}</span>
+                                <span class="incident-meta-item"><i class="fas fa-clock"></i> ${escapeHtml(incident.time_since)}</span>
+                                <span class="incident-meta-item"><i class="fas fa-map-marker-alt"></i> ${escapeHtml(incident.address)}</span>
+                                <span class="incident-meta-item"><i class="fas fa-comments"></i> ${incident.comment_count}</span>
+                                <span class="incident-meta-item"><i class="fas fa-check-double"></i> ${incident.verification_count}</span>
+                                ${distanceMeta}
+                                ${mediaRef}
+                            </div>
+                        </div>
+                    </a>
+                `;
+            }).join('');
+        }
+
+        function fetchLiveIncidents() {
+            if (isFetching) {
+                return;
+            }
+            isFetching = true;
+
+            const params = new URLSearchParams({
+                category: getFilterValue('category'),
+                status: getFilterValue('status'),
+                severity: getFilterValue('severity'),
+                search: getFilterValue('search'),
+                radius_km: liveRadiusSelect ? liveRadiusSelect.value : '5',
+            });
+
+            if (liveLocation) {
+                params.set('latitude', liveLocation.latitude);
+                params.set('longitude', liveLocation.longitude);
+            }
+
+            fetch(`${apiUrl}?${params.toString()}`)
+                .then((response) => response.json())
+                .then((data) => {
+                    renderIncidents(data.incidents || []);
+
+                    if (data.location_applied && liveLocation) {
+                        updateStatus(`Live updates on: incidents within ${data.radius_km} km`);
+                    } else {
+                        updateStatus('Live updates on: all incidents');
+                    }
+                })
+                .catch(() => {
+                    updateStatus('Live updates unavailable right now');
+                })
+                .finally(() => {
+                    isFetching = false;
+                });
+        }
+
+        if (liveRadiusSelect) {
+            liveRadiusSelect.addEventListener('change', fetchLiveIncidents);
+        }
+
+        if (liveLocationBtn) {
+            liveLocationBtn.addEventListener('click', function () {
+                if (!navigator.geolocation) {
+                    updateStatus('Geolocation is not supported in this browser');
+                    return;
+                }
+
+                liveLocationBtn.disabled = true;
+                liveLocationBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Accessing location...';
+
+                navigator.geolocation.getCurrentPosition(
+                    function (position) {
+                        liveLocation = {
+                            latitude: position.coords.latitude.toFixed(6),
+                            longitude: position.coords.longitude.toFixed(6)
+                        };
+                        liveLocationBtn.innerHTML = '<i class="fas fa-check"></i> Live Nearby Enabled';
+                        liveLocationBtn.classList.add('btn-success');
+                        fetchLiveIncidents();
+                    },
+                    function () {
+                        updateStatus('Location access denied. Showing all incidents.');
+                        liveLocationBtn.innerHTML = '<i class="fas fa-location-crosshairs"></i> Enable Live Nearby';
+                        liveLocationBtn.disabled = false;
+                    }
+                );
+            });
+        }
+
+        fetchLiveIncidents();
+        setInterval(fetchLiveIncidents, 20000);
+    })();
+</script>
+{% endblock %}

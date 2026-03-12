@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+{% block title %}UrbanSafe - Community Safety & Alert Platform{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <h1 class="hero-title">
+        Building <span class="highlight">Safer Communities</span><br>Together
+    </h1>
+    <p class="hero-subtitle">
+        Report safety hazards, emergencies, and suspicious activities in real-time.
+        Stay informed with instant alerts and help keep your neighborhood safe.
+    </p>
+    <div class="hero-actions">
+        <a href="{% url 'register' %}" class="btn btn-primary btn-lg">
+            <i class="fas fa-user-plus"></i> Get Started
+        </a>
+        <a href="{% url 'login' %}" class="btn btn-outline btn-lg">
+            <i class="fas fa-sign-in-alt"></i> Login
+        </a>
+    </div>
+
+    <div class="hero-stats">
+        <div>
+            <div class="hero-stat-value">{{ total_incidents }}</div>
+            <div class="hero-stat-label">Incidents Reported</div>
+        </div>
+        <div>
+            <div class="hero-stat-value">{{ resolved_count }}</div>
+            <div class="hero-stat-label">Resolved</div>
+        </div>
+        <div>
+            <div class="hero-stat-value">{{ total_users }}</div>
+            <div class="hero-stat-label">Active Citizens</div>
+        </div>
+    </div>
+</section>
+
+<section class="features-grid">
+    <div class="feature-card">
+        <div class="feature-icon red">
+            <i class="fas fa-exclamation-triangle"></i>
+        </div>
+        <h3 class="feature-title">Incident Reporting</h3>
+        <p class="feature-desc">Quickly report hazards, emergencies, or suspicious activities with photos and precise
+            location data.</p>
+    </div>
+    <div class="feature-card">
+        <div class="feature-icon blue">
+            <i class="fas fa-bell"></i>
+        </div>
+        <h3 class="feature-title">Real-Time Alerts</h3>
+        <p class="feature-desc">Get instantly notified about safety incidents happening near your location.</p>
+    </div>
+    <div class="feature-card">
+        <div class="feature-icon green">
+            <i class="fas fa-check-double"></i>
+        </div>
+        <h3 class="feature-title">Community Verification</h3>
+        <p class="feature-desc">Verify or dispute reported incidents to ensure accuracy and reliability of all reports.
+        </p>
+    </div>
+    <div class="feature-card">
+        <div class="feature-icon purple">
+            <i class="fas fa-comments"></i>
+        </div>
+        <h3 class="feature-title">Discussion & Help</h3>
+        <p class="feature-desc">Collaborate with your community—discuss incidents, offer help, and coordinate responses.
+        </p>
+    </div>
+    <div class="feature-card">
+        <div class="feature-icon orange">
+            <i class="fas fa-chart-line"></i>
+        </div>
+        <h3 class="feature-title">Analytics Dashboard</h3>
+        <p class="feature-desc">Administrators can monitor trends, track incident patterns, and improve community
+            safety.</p>
+    </div>
+    <div class="feature-card">
+        <div class="feature-icon cyan">
+            <i class="fas fa-map-marker-alt"></i>
+        </div>
+        <h3 class="feature-title">Location-Based</h3>
+        <p class="feature-desc">Pinpoint exact incident locations for faster response and better situational awareness.
+        </p>
+    </div>
+</section>
+
+{% if recent_incidents %}
+<section class="mt-3">
+    <div class="page-header">
+        <h2 class="page-title">Recent Incidents</h2>
+        <p class="page-subtitle">Latest community safety reports</p>
+    </div>
+    <div class="incident-grid">
+        {% for incident in recent_incidents %}
+        <div class="incident-card" onclick="window.location.href='{% url 'login' %}'">
+            {% if incident.photo %}
+            <img src="{{ incident.photo.url }}" alt="{{ incident.title }}" class="incident-card-img">
+            {% endif %}
+            <div class="incident-card-body">
+                <div class="incident-card-header">
+                    <h3 class="incident-card-title">{{ incident.title }}</h3>
+                    <span class="badge badge-{{ incident.severity }}">{{ incident.get_severity_display }}</span>
+                </div>
+                <p class="incident-card-desc">{{ incident.description }}</p>
+                <div class="incident-card-meta">
+                    <span class="badge badge-{{ incident.category }}">{{ incident.get_category_display }}</span>
+                    <span class="incident-meta-item">
+                        <i class="fas fa-clock"></i> {{ incident.time_since }}
+                    </span>
+                    <span class="incident-meta-item">
+                        <i class="fas fa-map-marker-alt"></i> {{ incident.address|truncatewords:4 }}
+                    </span>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+{% endblock %}

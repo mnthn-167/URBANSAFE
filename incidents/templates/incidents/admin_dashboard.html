@@ -1,0 +1,236 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Admin Dashboard - UrbanSafe{% endblock %}
+
+{% block extra_css %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Admin Dashboard</h1>
+    <p class="page-subtitle">Monitor community safety analytics and manage incidents</p>
+</div>
+
+<!-- Stats Cards -->
+<div class="dashboard-stats">
+    <div class="stat-card blue">
+        <div class="stat-icon blue"><i class="fas fa-exclamation-circle"></i></div>
+        <div class="stat-value">{{ total_incidents }}</div>
+        <div class="stat-label">Total Incidents</div>
+    </div>
+    <div class="stat-card orange">
+        <div class="stat-icon orange"><i class="fas fa-calendar-week"></i></div>
+        <div class="stat-value">{{ incidents_this_week }}</div>
+        <div class="stat-label">This Week</div>
+    </div>
+    <div class="stat-card green">
+        <div class="stat-icon green"><i class="fas fa-check-circle"></i></div>
+        <div class="stat-value">{{ resolved_incidents }}</div>
+        <div class="stat-label">Resolved</div>
+    </div>
+    <div class="stat-card red">
+        <div class="stat-icon red"><i class="fas fa-shield-halved"></i></div>
+        <div class="stat-value">{{ verified_incidents }}</div>
+        <div class="stat-label">Verified</div>
+    </div>
+    <div class="stat-card blue">
+        <div class="stat-icon blue"><i class="fas fa-users"></i></div>
+        <div class="stat-value">{{ total_users }}</div>
+        <div class="stat-label">Users</div>
+    </div>
+    <div class="stat-card green">
+        <div class="stat-icon green"><i class="fas fa-percentage"></i></div>
+        <div class="stat-value">{{ resolution_rate }}%</div>
+        <div class="stat-label">Resolution Rate</div>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="dashboard-grid">
+    <div class="chart-container">
+        <div class="chart-title">Incidents Over Time (30 Days)</div>
+        <canvas id="timeChart" height="220"></canvas>
+    </div>
+    <div class="chart-container">
+        <div class="chart-title">By Category</div>
+        <canvas id="categoryChart" height="220"></canvas>
+    </div>
+    <div class="chart-container">
+        <div class="chart-title">By Severity</div>
+        <canvas id="severityChart" height="220"></canvas>
+    </div>
+    <div class="chart-container">
+        <div class="chart-title">By Status</div>
+        <canvas id="statusChart" height="220"></canvas>
+    </div>
+</div>
+
+<!-- Recent Incidents Table -->
+<div class="card mb-3">
+    <h3 style="margin-bottom: 1rem; font-size: 1.1rem;">
+        <i class="fas fa-clock" style="color: var(--accent);"></i> Recent Incidents
+    </h3>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Category</th>
+                    <th>Severity</th>
+                    <th>Status</th>
+                    <th>Reporter</th>
+                    <th>Time</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for incident in recent_incidents %}
+                <tr>
+                    <td><a href="{% url 'incident_detail' incident.pk %}">{{ incident.title|truncatewords:5 }}</a></td>
+                    <td><span class="badge badge-{{ incident.category }}">{{ incident.get_category_display }}</span>
+                    </td>
+                    <td><span class="badge badge-{{ incident.severity }}">{{ incident.get_severity_display }}</span>
+                    </td>
+                    <td><span class="badge badge-{{ incident.status }}">{{ incident.get_status_display }}</span></td>
+                    <td>{{ incident.reported_by.get_full_name|default:incident.reported_by.username }}</td>
+                    <td class="text-muted" style="font-size: 0.8rem;">{{ incident.time_since }}</td>
+                    <td>
+                        <a href="{% url 'incident_detail' incident.pk %}" class="btn btn-outline btn-sm">View</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center text-muted" style="padding: 2rem;">No incidents yet</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Top Reporters -->
+<div class="card" style="max-width: 500px;">
+    <h3 style="margin-bottom: 1rem; font-size: 1.1rem;">
+        <i class="fas fa-trophy" style="color: var(--warning);"></i> Top Reporters
+    </h3>
+    {% for reporter in top_reporters %}
+    <div class="flex-between" style="padding: 0.5rem 0; border-bottom: 1px solid var(--border); font-size: 0.9rem;">
+        <div class="flex gap-1" style="align-items: center;">
+            <span
+                style="width: 28px; height: 28px; border-radius: 50%; background: var(--gradient-primary); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700;">
+                {{ reporter.first_name.0|default:reporter.username.0|upper }}
+            </span>
+            <span>{{ reporter.get_full_name|default:reporter.username }}</span>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <span style="font-weight: 700; color: var(--accent);" title="Incidents Reported">{{ reporter.incident_count }}</span>
+            <a href="{% url 'delete_user' reporter.pk %}" class="btn btn-outline btn-sm" style="padding: 0.1rem 0.4rem; color: var(--danger); border-color: var(--danger);" title="Delete User">
+                <i class="fas fa-trash"></i>
+            </a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ daily_incidents|json_script:"daily-incidents-data" }}
+{{ category_data|json_script:"category-data" }}
+{{ severity_data|json_script:"severity-data" }}
+{{ status_data|json_script:"status-data" }}
+
+<script>
+    // Pass data safely to JS without causing template parse errors in IDEs
+    const dailyIncidents = JSON.parse(document.getElementById('daily-incidents-data').textContent);
+    const categoryData = JSON.parse(document.getElementById('category-data').textContent);
+    const severityData = JSON.parse(document.getElementById('severity-data').textContent);
+    const statusData = JSON.parse(document.getElementById('status-data').textContent);
+
+    // Chart.js config
+    Chart.defaults.color = '#8b95a8';
+    Chart.defaults.borderColor = '#1e293b';
+    Chart.defaults.font.family = 'Inter';
+
+    // Time Chart
+    const timeCtx = document.getElementById('timeChart').getContext('2d');
+    new Chart(timeCtx, {
+        type: 'line',
+        data: {
+            labels: dailyIncidents.map(d => d.date),
+            datasets: [{
+                label: 'Incidents',
+                data: dailyIncidents.map(d => d.count),
+                borderColor: '#3b82f6',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                fill: true,
+                tension: 0.4,
+                pointRadius: 2,
+                pointHoverRadius: 5,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, ticks: { stepSize: 1 } },
+                x: { ticks: { maxTicksLimit: 10 } }
+            }
+        }
+    });
+
+    // Category Chart
+    const catLabels = {
+        'hazard': 'Hazard', 'emergency': 'Emergency', 'suspicious': 'Suspicious',
+        'infrastructure': 'Infrastructure', 'other': 'Other'
+    };
+    const catColors = ['#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#6b7280'];
+    const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+    new Chart(categoryCtx, {
+        type: 'doughnut',
+        data: {
+            labels: categoryData.map(d => catLabels[d.category] || d.category),
+            datasets: [{
+                data: categoryData.map(d => d.count),
+                backgroundColor: catColors.slice(0, categoryData.length),
+                borderWidth: 0,
+            }]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+    });
+
+    // Severity Chart
+    const sevColors = ['#10b981', '#f59e0b', '#ef4444', '#ff6b6b'];
+    const severityCtx = document.getElementById('severityChart').getContext('2d');
+    const toTitleCase = str => str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+    
+    new Chart(severityCtx, {
+        type: 'doughnut',
+        data: {
+            labels: severityData.map(d => toTitleCase(d.severity)),
+            datasets: [{
+                data: severityData.map(d => d.count),
+                backgroundColor: sevColors.slice(0, severityData.length),
+                borderWidth: 0,
+            }]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+    });
+
+    // Status Chart
+    const statusColors = ['#3b82f6', '#10b981', '#f59e0b', '#6b7280'];
+    const statusCtx = document.getElementById('statusChart').getContext('2d');
+    new Chart(statusCtx, {
+        type: 'doughnut',
+        data: {
+            labels: statusData.map(d => toTitleCase(d.status)),
+            datasets: [{
+                data: statusData.map(d => d.count),
+                backgroundColor: statusColors.slice(0, statusData.length),
+                borderWidth: 0,
+            }]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+    });
+</script>
+{% endblock %}

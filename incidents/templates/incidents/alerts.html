@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% block title %}Alerts - UrbanSafe{% endblock %}
+
+{% block content %}
+<div class="page-header flex-between">
+    <div>
+        <h1 class="page-title">My Alerts</h1>
+        <p class="page-subtitle">
+            {% if unread_count > 0 %}
+            You have <strong>{{ unread_count }}</strong> unread alert{{ unread_count|pluralize }}
+            {% else %}
+            All caught up! No unread alerts.
+            {% endif %}
+        </p>
+    </div>
+    {% if unread_count > 0 %}
+    <a href="{% url 'mark_all_alerts_read' %}" class="btn btn-outline btn-sm">
+        <i class="fas fa-check-double"></i> Mark All as Read
+    </a>
+    {% endif %}
+</div>
+
+{% if alerts %}
+<div>
+    {% for alert in alerts %}
+    <a href="{% url 'mark_alert_read' alert.pk %}" class="alert-item {% if not alert.is_read %}unread{% endif %}"
+        style="color: inherit;">
+        <div class="alert-icon {{ alert.incident.category }}">
+            {% if alert.incident.category == 'hazard' %}
+            <i class="fas fa-exclamation-triangle"></i>
+            {% elif alert.incident.category == 'emergency' %}
+            <i class="fas fa-ambulance"></i>
+            {% elif alert.incident.category == 'suspicious' %}
+            <i class="fas fa-eye"></i>
+            {% elif alert.incident.category == 'infrastructure' %}
+            <i class="fas fa-road"></i>
+            {% else %}
+            <i class="fas fa-info-circle"></i>
+            {% endif %}
+        </div>
+        <div class="alert-content">
+            <div class="alert-title">{{ alert.incident.title }}</div>
+            <div class="alert-meta">
+                <span class="badge badge-{{ alert.incident.category }}" style="font-size: 0.65rem;">{{
+                    alert.incident.get_category_display }}</span>
+                &bull; {{ alert.incident.address|truncatewords:5 }}
+                &bull; {{ alert.created_at|timesince }} ago
+            </div>
+        </div>
+        <div>
+            {% if not alert.is_read %}
+            <span
+                style="width: 8px; height: 8px; border-radius: 50%; background: var(--accent); display: inline-block;"></span>
+            {% endif %}
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="empty-icon"><i class="fas fa-bell-slash"></i></div>
+    <h3 class="empty-title">No Alerts Yet</h3>
+    <p class="empty-desc">You'll receive alerts when incidents are reported near your location. Make sure to set your
+        location in your profile.</p>
+    <a href="{% url 'profile' %}" class="btn btn-primary">
+        <i class="fas fa-map-marker-alt"></i> Set My Location
+    </a>
+</div>
+{% endif %}
+{% endblock %}

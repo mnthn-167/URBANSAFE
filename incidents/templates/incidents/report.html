@@ -1,0 +1,301 @@
+{% extends 'base.html' %}
+{% block title %}Report Incident - UrbanSafe{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Report an Incident</h1>
+    <p class="page-subtitle">Help keep your community safe by reporting hazards, emergencies, or suspicious activities
+    </p>
+</div>
+
+<div class="card" style="max-width: 750px;">
+    <form method="POST" enctype="multipart/form-data" id="report-form">
+        {% csrf_token %}
+
+        <div class="form-group">
+            <label class="form-label" for="{{ form.title.id_for_label }}">
+                <i class="fas fa-heading" style="color: var(--accent);"></i> Title *
+            </label>
+            {{ form.title }}
+            {% if form.title.errors %}
+            <ul class="form-errors">{% for e in form.title.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+            {% endif %}
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" for="{{ form.description.id_for_label }}">
+                <i class="fas fa-align-left" style="color: var(--accent);"></i> Description *
+            </label>
+            {{ form.description }}
+            {% if form.description.errors %}
+            <ul class="form-errors">{% for e in form.description.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+            {% endif %}
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label" for="{{ form.category.id_for_label }}">
+                    <i class="fas fa-tag" style="color: var(--warning);"></i> Category *
+                </label>
+                {{ form.category }}
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="{{ form.severity.id_for_label }}">
+                    <i class="fas fa-exclamation-triangle" style="color: var(--danger);"></i> Severity *
+                </label>
+                {{ form.severity }}
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" for="{{ form.address.id_for_label }}">
+                <i class="fas fa-map-marker-alt" style="color: var(--success);"></i> Location Address *
+            </label>
+            {{ form.address }}
+        </div>
+
+        <div class="form-group">
+            <button type="button" id="get-location-btn" class="btn btn-outline btn-sm mb-1">
+                <i class="fas fa-location-crosshairs"></i> Use My Location
+            </button>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label" for="{{ form.latitude.id_for_label }}">Latitude</label>
+                {{ form.latitude }}
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="{{ form.longitude.id_for_label }}">Longitude</label>
+                {{ form.longitude }}
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" for="{{ form.photo.id_for_label }}">
+                <i class="fas fa-camera" style="color: #8b5cf6;"></i> Photo (optional)
+            </label>
+            {{ form.photo }}
+            <p class="form-help">Upload a photo of the incident for better identification</p>
+        </div>
+
+        <div class="flex gap-1 mt-2">
+            <button type="submit" class="btn btn-primary btn-lg">
+                <i class="fas fa-paper-plane"></i> Submit Report
+            </button>
+            <a href="{% url 'incident_list' %}" class="btn btn-outline btn-lg">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<div class="card mt-2" style="max-width: 950px;">
+    <div class="page-header" style="margin-bottom: 1rem;">
+        <h2 class="page-title" style="font-size: 1.4rem;">Nearby Real Incidents</h2>
+        <p class="page-subtitle">Use location service to see recent nearby incidents with media, so your report is more accurate and useful.</p>
+    </div>
+
+    <div class="filters-bar" style="margin-bottom: 1rem;">
+        <button type="button" id="load-nearby-incidents-btn" class="btn btn-outline btn-sm">
+            <i class="fas fa-location-crosshairs"></i> Find Nearby Incidents
+        </button>
+        <select id="nearby-radius-km" class="filter-select" style="max-width: 170px;">
+            <option value="2">2 km radius</option>
+            <option value="5" selected>5 km radius</option>
+            <option value="10">10 km radius</option>
+            <option value="25">25 km radius</option>
+        </select>
+        <span class="incident-meta-item" id="nearby-status">
+            <i class="fas fa-info-circle"></i> Click "Find Nearby Incidents" to load location-based incidents.
+        </span>
+    </div>
+
+    <div class="incident-grid" id="nearby-incident-grid" style="display: none;"></div>
+
+    <div class="empty-state" id="nearby-empty-state">
+        <div class="empty-icon">
+            <i class="fas fa-map-location-dot"></i>
+        </div>
+        <h3 class="empty-title">No Nearby Incidents Loaded</h3>
+        <p class="empty-desc">
+            Nearby incidents with photos and media references will appear here after location access.
+        </p>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    (function () {
+        const apiUrl = "{% url 'live_incidents_api' %}";
+        const latInput = document.getElementById('id_latitude');
+        const lngInput = document.getElementById('id_longitude');
+        const loadNearbyBtn = document.getElementById('load-nearby-incidents-btn');
+        const radiusSelect = document.getElementById('nearby-radius-km');
+        const nearbyGrid = document.getElementById('nearby-incident-grid');
+        const nearbyEmpty = document.getElementById('nearby-empty-state');
+        const nearbyStatus = document.getElementById('nearby-status');
+
+        if (!loadNearbyBtn || !nearbyGrid || !nearbyEmpty) {
+            return;
+        }
+
+        let fetchTimer = null;
+        let currentLocation = null;
+
+        function escapeHtml(value) {
+            const span = document.createElement('span');
+            span.textContent = value || '';
+            return span.innerHTML;
+        }
+
+        function setStatus(message) {
+            if (nearbyStatus) {
+                nearbyStatus.innerHTML = `<i class="fas fa-info-circle"></i> ${message}`;
+            }
+        }
+
+        function parseExistingLocation() {
+            const lat = latInput ? parseFloat(latInput.value) : NaN;
+            const lng = lngInput ? parseFloat(lngInput.value) : NaN;
+            if (Number.isFinite(lat) && Number.isFinite(lng)) {
+                return { latitude: lat.toFixed(6), longitude: lng.toFixed(6) };
+            }
+            return null;
+        }
+
+        function renderNearbyIncidents(incidents) {
+            const visibleIncidents = incidents.slice(0, 6);
+            if (!visibleIncidents.length) {
+                nearbyGrid.style.display = 'none';
+                nearbyEmpty.style.display = 'block';
+                nearbyEmpty.querySelector('.empty-title').textContent = 'No Nearby Incidents Found';
+                nearbyEmpty.querySelector('.empty-desc').textContent = 'No incidents are currently reported in your selected radius.';
+                return;
+            }
+
+            nearbyEmpty.style.display = 'none';
+            nearbyGrid.style.display = 'grid';
+
+            nearbyGrid.innerHTML = visibleIncidents.map((incident) => {
+                const photoSection = incident.photo_url
+                    ? `<img src="${escapeHtml(incident.photo_url)}" alt="${escapeHtml(incident.title)}" class="incident-card-img">`
+                    : '';
+                const mediaRef = incident.media_reference
+                    ? `<span class="incident-meta-item" title="${escapeHtml(incident.media_reference)}"><i class="fas fa-image"></i> ${escapeHtml(incident.media_reference.split('/').pop())}</span>`
+                    : '<span class="incident-meta-item"><i class="fas fa-image"></i> No media attached</span>';
+                const distanceMeta = incident.distance_km !== null
+                    ? `<span class="incident-meta-item"><i class="fas fa-location-dot"></i> ${incident.distance_km} km away</span>`
+                    : '';
+
+                return `
+                    <a href="${escapeHtml(incident.detail_url)}" class="incident-card" style="color: inherit;">
+                        ${photoSection}
+                        <div class="incident-card-body">
+                            <div class="incident-card-header">
+                                <h3 class="incident-card-title">${escapeHtml(incident.title)}</h3>
+                                <span class="badge badge-${escapeHtml(incident.severity)}">${escapeHtml(incident.severity_display)}</span>
+                            </div>
+                            <p class="incident-card-desc">${escapeHtml(incident.description)}</p>
+                            <div class="incident-card-meta">
+                                <span class="badge badge-${escapeHtml(incident.category)}">${escapeHtml(incident.category_display)}</span>
+                                <span class="badge badge-${escapeHtml(incident.status)}">${escapeHtml(incident.status_display)}</span>
+                                <span class="incident-meta-item"><i class="fas fa-clock"></i> ${escapeHtml(incident.time_since)}</span>
+                                <span class="incident-meta-item"><i class="fas fa-map-marker-alt"></i> ${escapeHtml(incident.address)}</span>
+                                ${distanceMeta}
+                                ${mediaRef}
+                            </div>
+                        </div>
+                    </a>
+                `;
+            }).join('');
+        }
+
+        function fetchNearbyIncidents() {
+            if (!currentLocation) {
+                setStatus('Location unavailable. Please allow location access.');
+                return;
+            }
+
+            const params = new URLSearchParams({
+                latitude: currentLocation.latitude,
+                longitude: currentLocation.longitude,
+                radius_km: radiusSelect ? radiusSelect.value : '5',
+            });
+
+            setStatus('Loading nearby incidents...');
+            fetch(`${apiUrl}?${params.toString()}`)
+                .then((response) => response.json())
+                .then((data) => {
+                    renderNearbyIncidents(data.incidents || []);
+                    setStatus(`Showing nearby incidents within ${data.radius_km} km. Auto-refresh every 20 seconds.`);
+                })
+                .catch(() => {
+                    setStatus('Unable to load nearby incidents right now.');
+                });
+        }
+
+        function startAutoRefresh() {
+            if (fetchTimer) {
+                clearInterval(fetchTimer);
+            }
+            fetchTimer = setInterval(fetchNearbyIncidents, 20000);
+        }
+
+        function acquireLocationAndLoad() {
+            const existingLocation = parseExistingLocation();
+            if (existingLocation) {
+                currentLocation = existingLocation;
+                fetchNearbyIncidents();
+                startAutoRefresh();
+                return;
+            }
+
+            if (!navigator.geolocation) {
+                setStatus('Geolocation is not supported by your browser.');
+                return;
+            }
+
+            loadNearbyBtn.disabled = true;
+            loadNearbyBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Accessing location...';
+
+            navigator.geolocation.getCurrentPosition(
+                function (position) {
+                    currentLocation = {
+                        latitude: position.coords.latitude.toFixed(6),
+                        longitude: position.coords.longitude.toFixed(6),
+                    };
+                    if (latInput) latInput.value = currentLocation.latitude;
+                    if (lngInput) lngInput.value = currentLocation.longitude;
+                    loadNearbyBtn.innerHTML = '<i class="fas fa-check"></i> Nearby Loaded';
+                    loadNearbyBtn.classList.add('btn-success');
+                    loadNearbyBtn.disabled = false;
+                    fetchNearbyIncidents();
+                    startAutoRefresh();
+                },
+                function () {
+                    setStatus('Location access denied. Nearby incidents cannot be loaded.');
+                    loadNearbyBtn.innerHTML = '<i class="fas fa-location-crosshairs"></i> Find Nearby Incidents';
+                    loadNearbyBtn.disabled = false;
+                }
+            );
+        }
+
+        loadNearbyBtn.addEventListener('click', acquireLocationAndLoad);
+        if (radiusSelect) {
+            radiusSelect.addEventListener('change', fetchNearbyIncidents);
+        }
+
+        const existingLocation = parseExistingLocation();
+        if (existingLocation) {
+            currentLocation = existingLocation;
+            fetchNearbyIncidents();
+            startAutoRefresh();
+        }
+        window.addEventListener('beforeunload', function () {
+            if (fetchTimer) {
+                clearInterval(fetchTimer);
+            }
+        });
+    })();
+</script>
+{% endblock %}
