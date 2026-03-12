@@ -14,7 +14,8 @@ DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
 
 ALLOWED_HOSTS = ['.vercel.app', '.now.sh', 'localhost', '127.0.0.1']
 if os.environ.get('ALLOWED_HOSTS'):
-    ALLOWED_HOSTS.extend([h.strip() for h in os.environ.get('ALLOWED_HOSTS').split(',')])
+    raw_hosts = os.environ.get('ALLOWED_HOSTS').split(',')
+    ALLOWED_HOSTS.extend([h.strip().replace('https://', '').replace('http://', '').split('/')[0] for h in raw_hosts])
 
 # Secure Proxy Settings for Vercel/Render
 USE_X_FORWARDED_HOST = True
