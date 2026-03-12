@@ -10,7 +10,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-urbansafe-dev-key-change-in-production-2024')
 
-DEBUG = True  # Temporarily True to see the Render error
+DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
 ALLOWED_HOSTS = ['.vercel.app', '.now.sh', '.onrender.com', 'localhost', '127.0.0.1']
 if os.environ.get('ALLOWED_HOSTS'):
