@@ -11,6 +11,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-urbansafe-dev-key-change-in-production-2024')
 
 DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
+# DEBUG = True  # Uncomment this to see the exact error if environment variable isn't working
+
 
 ALLOWED_HOSTS = ['.vercel.app', '.now.sh', 'localhost', '127.0.0.1']
 if os.environ.get('ALLOWED_HOSTS'):
