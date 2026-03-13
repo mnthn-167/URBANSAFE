@@ -12,7 +12,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-urbansafe-dev-key-cha
 
 DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
-ALLOWED_HOSTS = ['.vercel.app', '.now.sh', '.onrender.com', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['.vercel.app', 'urbansafe.vercel.app', '.now.sh', '.onrender.com', 'localhost', '127.0.0.1']
 if os.environ.get('ALLOWED_HOSTS'):
     raw_hosts = os.environ.get('ALLOWED_HOSTS').split(',')
     ALLOWED_HOSTS.extend([h.strip().replace('https://', '').replace('http://', '').split('/')[0] for h in raw_hosts])
@@ -105,7 +105,7 @@ STORAGES = {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
     },
     "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
     },
 }
 
