@@ -30,6 +30,9 @@ def _apply_incident_filters(incidents, category='', status='', severity='', sear
     return incidents
 
 
+from django_ratelimit.decorators import ratelimit
+
+@ratelimit(key='ip', rate='10/m', block=True)
 def home_view(request):
     """Landing page."""
     if request.user.is_authenticated:

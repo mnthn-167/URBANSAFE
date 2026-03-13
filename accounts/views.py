@@ -22,6 +22,9 @@ def register_view(request):
     return render(request, 'accounts/register.html', {'form': form})
 
 
+from django_ratelimit.decorators import ratelimit
+
+@ratelimit(key='ip', rate='5/m', block=True)
 def login_view(request):
     """Secure user login view."""
 
